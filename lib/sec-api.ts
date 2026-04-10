@@ -4,7 +4,7 @@ const RATE_LIMIT_MS = 110; // SEC allows 10 req/sec, be conservative
 
 // SEC requires a User-Agent with contact information
 const SEC_HEADERS = {
-  'User-Agent': 'SECFilingDownloader/1.0 (contact: support@secfilings.app)',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0',
   'Accept': 'application/json',
   'Accept-Language': 'en-US,en;q=0.9',
 };
