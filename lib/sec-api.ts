@@ -26,26 +26,33 @@ export function padCik(cik: string | number): string {
   return String(cik).padStart(10, '0');
 }
 
-// Convert accession number to folder path for Archives URL
-// e.g., 0000320193-23-000123 -> 0000320193/23000123
-export function accessionToPath(accessionNumber: string): string {
-  const parts = accessionNumber.split('-');
-  if (parts.length !== 3) return accessionNumber.replace(/-/g, '');
-  const cik = parts[0];
-  const yy = parts[1];
-  const seq = parts[2];
-  return `${cik}/${yy}${seq}`;
+// Convert CIK to stripped form (no leading zeros) for SEC Archives URL path
+export function stripCik(cik: string | number): string {
+  return String(cik).replace(/^0+/, '') || '0';
 }
 
-// Build document URL for a filing
+// Remove all dashes from accession number for folder path
+// e.g., 0001628280-25-008724 -> 000162828025008724
+export function accessionToFolder(accessionNumber: string): string {
+  return accessionNumber.replace(/-/g, '');
+}
+
+// Build SEC Archives document URL for a filing
+// URL pattern: https://www.sec.gov/Archives/edgar/data/{cik_stripped}/{accession_no_dashes}/{primaryDocument}
 export function buildFilingUrl(cik: string, accessionNumber: string, primaryDocument: string): string {
-  const paddedCik = padCik(cik);
-  const path = accessionToPath(accessionNumber);
-  return `https://www.sec.gov/Archives/edgar/data/${paddedCik}/${path}/${primaryDocument}`;
+  const cikStripped = stripCik(cik);
+  const folder = accessionToFolder(accessionNumber);
+  return `https://www.sec.gov/Archives/edgar/data/${cikStripped}/${folder}/${primaryDocument}`;
+}
+
+// Build the SEC EDGAR filing page URL (for "View" link)
+export function buildFilingPageUrl(cik: string, accessionNumber: string): string {
+  // Modern SEC EDGAR URL format
+  const accNoDash = accessionToFolder(accessionNumber);
+  return `https://www.sec.gov/Archives/edgar/data/${stripCik(cik)}/${accNoDash}`;
 }
 
 // Search company by ticker using SEC EDGAR full-text search API
-// This is more reliable than company_tickers.json which has rate limits
 export async function searchCompany(ticker: string): Promise<Company> {
   const url = `https://efts.sec.gov/LATEST/search-index?q=${encodeURIComponent(ticker)}&dateRange=custom&category=form-type&from=&to=&forms=${encodeURIComponent('10-K,10-Q,8-K')}`;
 

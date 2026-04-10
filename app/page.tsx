@@ -142,6 +142,7 @@ export default function Home() {
             <FilingTable
               filings={filings}
               ticker={company?.ticker || ''}
+              cik={company?.cik || ''}
               selectedIndices={selectedIndices}
               onToggleIndex={toggleIndex}
               onToggleAll={toggleAll}

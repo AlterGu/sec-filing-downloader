@@ -1,10 +1,12 @@
 'use client';
 
 import { Filing } from '@/lib/types';
+import { buildFilingPageUrl } from '@/lib/sec-api';
 
 interface FilingTableProps {
   filings: Filing[];
   ticker: string;
+  cik: string;
   selectedIndices: Set<number>;
   onToggleIndex: (index: number) => void;
   onToggleAll: () => void;
@@ -26,6 +28,7 @@ function formatSize(bytes?: number): string {
 export default function FilingTable({
   filings,
   ticker,
+  cik,
   selectedIndices,
   onToggleIndex,
   onToggleAll,
@@ -107,7 +110,7 @@ export default function FilingTable({
                 </td>
                 <td className="px-4 py-3">
                   <a
-                    href={`https://www.sec.gov/cgi-bin/burrowse-edgar?action=getcompany&CIK=${ticker}&type=${encodeURIComponent(filing.form)}&dateb=&owner=include&count=10`}
+                    href={buildFilingPageUrl(cik, filing.accessionNumber)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-xs"

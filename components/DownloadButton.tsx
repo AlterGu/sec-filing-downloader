@@ -4,7 +4,7 @@ import { useState } from 'react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { Filing } from '@/lib/types';
-import { buildFilingUrl, padCik } from '@/lib/sec-api';
+import { buildFilingUrl } from '@/lib/sec-api';
 
 interface DownloadButtonProps {
   filings: Filing[];
