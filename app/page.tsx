@@ -1,65 +1,171 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useCallback } from 'react';
+import SearchForm from '@/components/SearchForm';
+import FilingTable from '@/components/FilingTable';
+import DownloadButton from '@/components/DownloadButton';
+import { Filing, Company } from '@/lib/types';
 
 export default function Home() {
+  const [company, setCompany] = useState<Company | null>(null);
+  const [filings, setFilings] = useState<Filing[]>([]);
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string>('');
+
+  const handleSearch = useCallback(async (
+    ticker: string,
+    types: string[],
+    from: string,
+    to: string
+  ) => {
+    setLoading(true);
+    setSearchError('');
+    setSelectedIndices(new Set());
+
+    try {
+      // Step 1: Search for company CIK
+      const searchRes = await fetch(`/api/search?ticker=${encodeURIComponent(ticker)}`);
+      if (!searchRes.ok) {
+        const err = await searchRes.json();
+        throw new Error(err.error || 'Company not found');
+      }
+      const companyData: Company = await searchRes.json();
+      setCompany(companyData);
+
+      // Step 2: Get filings for that CIK
+      const params = new URLSearchParams();
+      if (types.length > 0) params.set('types', types.join(','));
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+
+      const filingsRes = await fetch(
+        `/api/filings/${companyData.cik}?${params.toString()}`
+      );
+      if (!filingsRes.ok) {
+        const err = await filingsRes.json();
+        throw new Error(err.error || 'Failed to fetch filings');
+      }
+      const filingsData = await filingsRes.json();
+      setFilings(filingsData.filings || []);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'An error occurred';
+      setSearchError(msg);
+      setFilings([]);
+      setCompany(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const toggleIndex = useCallback((index: number) => {
+    setSelectedIndices(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleAll = useCallback(() => {
+    setSelectedIndices(prev => {
+      if (prev.size === filings.length) {
+        return new Set();
+      }
+      return new Set(filings.map((_, i) => i));
+    });
+  }, [filings]);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <main className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Header */}
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-6xl mx-auto px-4 py-6">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            SEC Filing Downloader
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            Batch download SEC EDGAR filings for US stocks
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+      </header>
+
+      {/* Content */}
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        {/* Search Section */}
+        <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+          <SearchForm onSearch={handleSearch} loading={loading} error={searchError} />
+        </section>
+
+        {/* Company Info */}
+        {company && (
+          <section className="mb-4">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl font-bold text-gray-900 dark:text-white">{company.ticker}</span>
+              <span className="text-gray-600 dark:text-gray-400">{company.name}</span>
+              <span className="text-xs text-gray-400 dark:text-gray-500">CIK: {company.cik}</span>
+            </div>
+          </section>
+        )}
+
+        {/* Results Info */}
+        {filings.length > 0 && (
+          <section className="mb-4 flex items-center justify-between">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Found <strong className="text-gray-900 dark:text-white">{filings.length}</strong> filings
+              {selectedIndices.size > 0 && (
+                <span className="ml-2">
+                  · <strong className="text-blue-600 dark:text-blue-400">{selectedIndices.size}</strong> selected
+                </span>
+              )}
+            </p>
+            {selectedIndices.size > 0 && selectedIndices.size < filings.length && (
+              <button
+                onClick={toggleAll}
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                Select all {filings.length}
+              </button>
+            )}
+          </section>
+        )}
+
+        {/* Filing Table */}
+        {filings.length > 0 && (
+          <section className="mb-24">
+            <FilingTable
+              filings={filings}
+              ticker={company?.ticker || ''}
+              selectedIndices={selectedIndices}
+              onToggleIndex={toggleIndex}
+              onToggleAll={toggleAll}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+          </section>
+        )}
+
+        {/* Empty State - show when searched but no results */}
+        {!loading && filings.length === 0 && company && !searchError && (
+          <div className="text-center py-16 text-gray-500 dark:text-gray-400">
+            <p>No filings match your filter criteria. Try adjusting the date range or filing types.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Download Button (floating) */}
+      {company && filings.length > 0 && (
+        <DownloadButton
+          filings={filings}
+          selectedIndices={selectedIndices}
+          ticker={company.ticker}
+          cik={company.cik}
+        />
+      )}
+    </main>
   );
 }
