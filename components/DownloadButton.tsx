@@ -20,7 +20,7 @@ export default function DownloadButton({ filings, selectedIndices, ticker, cik }
 
   const selectedFilings = Array.from(selectedIndices).map(i => filings[i]);
   const urls = selectedFilings.map(f => ({
-    url: buildFilingUrl(cik, f.accessionNumber, f.primaryDocument),
+    secUrl: buildFilingUrl(cik, f.accessionNumber, f.primaryDocument),
     label: `${f.form} ${f.filingDate}`,
   }));
 
@@ -30,32 +30,26 @@ export default function DownloadButton({ filings, selectedIndices, ticker, cik }
       return;
     }
     urls.forEach(item => {
-      window.open(item.url, '_blank');
+      window.open(item.secUrl, '_blank');
     });
   };
 
-  const handleBrowserDownload = () => {
+  const handleDownloadPdf = () => {
     urls.forEach((item, index) => {
       setTimeout(() => {
-        const a = document.createElement('a');
-        a.href = item.url;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }, index * 400);
+        const pdfProxyUrl = `/api/download-pdf?url=${encodeURIComponent(item.secUrl)}`;
+        window.open(pdfProxyUrl, '_blank');
+      }, index * 500);
     });
   };
 
   const handleCopyLinks = async () => {
-    const text = urls.map(item => `${item.label}\n${item.url}`).join('\n\n');
+    const text = urls.map(item => `${item.label}\n${item.secUrl}`).join('\n\n');
     try {
-      await navigator.clipboard.writeText(urls.map(item => item.url).join('\n'));
+      await navigator.clipboard.writeText(urls.map(item => item.secUrl).join('\n'));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback for older browsers
       const textarea = document.createElement('textarea');
       textarea.value = text;
       document.body.appendChild(textarea);
@@ -105,15 +99,15 @@ export default function DownloadButton({ filings, selectedIndices, ticker, cik }
         </span>
       </button>
 
-      {/* Browser Download Button */}
+      {/* Download PDF Button */}
       <button
-        onClick={handleBrowserDownload}
+        onClick={handleDownloadPdf}
         className="bg-green-600 hover:bg-green-700 text-white rounded-full shadow-lg flex items-center gap-2 px-5 py-3 cursor-pointer transition-all hover:scale-105"
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
         </svg>
-        <span className="font-semibold">Browser Download</span>
+        <span className="font-semibold">Download PDF</span>
         <span className="bg-white text-green-600 text-xs font-bold px-2 py-0.5 rounded-full">
           {selectedIndices.size}
         </span>
