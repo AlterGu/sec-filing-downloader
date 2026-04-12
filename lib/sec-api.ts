@@ -52,73 +52,31 @@ export function buildFilingPageUrl(cik: string, accessionNumber: string): string
   return `https://www.sec.gov/Archives/edgar/data/${stripCik(cik)}/${accNoDash}`;
 }
 
-// Search company by ticker using SEC EDGAR full-text search API
+// Search company by ticker using SEC company tickers file (exact ticker match)
 export async function searchCompany(ticker: string): Promise<Company> {
-  const url = `https://efts.sec.gov/LATEST/search-index?q=${encodeURIComponent(ticker)}&dateRange=custom&category=form-type&from=&to=&forms=${encodeURIComponent('10-K,10-Q,8-K')}`;
+  const url = 'https://www.sec.gov/files/company_tickers.json';
 
   const response = await rateLimitedFetch(url);
   if (!response.ok) {
-    throw new Error(`SEC search failed: ${response.status}`);
+    throw new Error(`Failed to fetch company tickers: ${response.status}`);
   }
 
   const data = await response.json();
-  const hits = data.hits?.hits || [];
-
-  // Find the entity that exactly matches the ticker
   const upperTicker = ticker.toUpperCase();
-  const entityHit = hits.find((hit: Record<string, unknown>) => {
-    const source = hit._source as Record<string, unknown>;
-    const displayNames = source.display_names as string[] || [];
-    return displayNames.some((name: string) => name.toUpperCase().includes(`(${upperTicker})`));
-  });
 
-  if (!entityHit) {
-    // Fallback: search in entity aggregations
-    const aggs = data.aggregations?.entity_filter?.buckets || [];
-    const match = aggs.find((b: Record<string, unknown>) => {
-      const key = b.key as string;
-      return key.toUpperCase().includes(`(${upperTicker})`);
-    });
-
-    if (!match) {
-      throw new Error(`Company not found for ticker: ${ticker}`);
+  // Find exact ticker match in the indexed data
+  for (const key of Object.keys(data)) {
+    const entry = data[key];
+    if (entry.ticker && entry.ticker.toUpperCase() === upperTicker) {
+      return {
+        cik: padCik(entry.cik_str),
+        name: entry.title,
+        ticker: entry.ticker,
+      };
     }
-
-    // Extract CIK from the entity name, e.g. "Rocket Lab USA, Inc.  (RKLB)  (CIK 0001819994)"
-    const cikMatch = String(match.key).match(/CIK (\d+)/);
-    if (!cikMatch) {
-      throw new Error(`Could not extract CIK for: ${ticker}`);
-    }
-
-    // Get company name (everything before the ticker symbol)
-    const nameMatch = String(match.key).match(/^(.+?)\s+\(/);
-    const name = nameMatch ? nameMatch[1].trim() : ticker;
-
-    return {
-      cik: padCik(cikMatch[1]),
-      name,
-      ticker: upperTicker,
-    };
   }
 
-  const source = entityHit._source as Record<string, unknown>;
-  const ciks = source.ciks as string[] || [];
-  const displayNames = source.display_names as string[] || [];
-
-  if (ciks.length === 0) {
-    throw new Error(`No CIK found for ticker: ${ticker}`);
-  }
-
-  // Extract company name from display_name
-  const displayName = displayNames[0] || '';
-  const nameMatch = displayName.match(/^(.+?)\s+\(/);
-  const name = nameMatch ? nameMatch[1].trim() : ticker;
-
-  return {
-    cik: padCik(ciks[0]),
-    name,
-    ticker: upperTicker,
-  };
+  throw new Error(`Company not found for ticker: ${ticker}`);
 }
 
 // Get filings for a company CIK
