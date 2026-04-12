@@ -79,7 +79,46 @@ export async function searchCompany(ticker: string): Promise<Company> {
   throw new Error(`Company not found for ticker: ${ticker}`);
 }
 
-// Get filings for a company CIK
+// Helper: parse a raw filings response (from recent or archived files) into Filing[]
+function parseFilings(raw: Record<string, unknown[]>, filters: FilingSearchParams): Filing[] {
+  const {
+    accessionNumber = [],
+    filingDate = [],
+    form = [],
+    primaryDocument = [],
+    primaryDocDescription = [],
+    size = [],
+  } = raw;
+
+  const filings: Filing[] = [];
+
+  for (let i = 0; i < accessionNumber.length; i++) {
+    const type = form[i] as string;
+    const date = filingDate[i] as string;
+
+    // Apply filters
+    if (filters.types && filters.types.length > 0) {
+      const typeMatches = filters.types.some(t => type === t || type.startsWith(t + '/'));
+      if (!typeMatches) continue;
+    }
+
+    if (filters.from && date < filters.from) continue;
+    if (filters.to && date > filters.to) continue;
+
+    filings.push({
+      accessionNumber: accessionNumber[i] as string,
+      filingDate: date,
+      form: type,
+      primaryDocument: primaryDocument[i] as string,
+      primaryDocDescription: primaryDocDescription[i] as string,
+      size: size[i] as number,
+    });
+  }
+
+  return filings;
+}
+
+// Get filings for a company CIK (handles pagination for 1000+ records)
 export async function getFilings(cik: string, params: FilingSearchParams = {}): Promise<{ filings: Filing[]; companyName: string }> {
   const paddedCik = padCik(cik);
   const url = `https://data.sec.gov/submissions/CIK${paddedCik}.json`;
@@ -98,40 +137,23 @@ export async function getFilings(cik: string, params: FilingSearchParams = {}): 
 
   const companyName: string = data.name || data.companyName || '';
 
-  const {
-    accessionNumber = [],
-    filingDate = [],
-    form = [],
-    primaryDocument = [],
-    primaryDocDescription = [],
-    size = [],
-  } = recent;
+  // Parse recent filings
+  let filings = parseFilings(recent, params);
 
-  const filings: Filing[] = [];
+  // Fetch older filings from paginated files if available
+  const files: Array<{ name: string; filingCount: number }> = data.filings?.files || [];
+  for (const file of files) {
+    const fileUrl = `https://data.sec.gov/submissions/${file.name}`;
+    const fileResponse = await rateLimitedFetch(fileUrl);
+    if (!fileResponse.ok) continue;
 
-  for (let i = 0; i < accessionNumber.length; i++) {
-    const type = form[i] as string;
-    const date = filingDate[i] as string;
-
-    // Apply filters
-    if (params.types && params.types.length > 0) {
-      // Handle partial matches like "10-K" matches "10-K/A"
-      const typeMatches = params.types.some(t => type === t || type.startsWith(t + '/'));
-      if (!typeMatches) continue;
-    }
-
-    if (params.from && date < params.from) continue;
-    if (params.to && date > params.to) continue;
-
-    filings.push({
-      accessionNumber: accessionNumber[i] as string,
-      filingDate: date,
-      form: type,
-      primaryDocument: primaryDocument[i] as string,
-      primaryDocDescription: primaryDocDescription[i] as string,
-      size: size[i] as number,
-    });
+    const oldData = await fileResponse.json();
+    const oldFilings = parseFilings(oldData, params);
+    filings = filings.concat(oldFilings);
   }
+
+  // Sort by filing date descending
+  filings.sort((a, b) => b.filingDate.localeCompare(a.filingDate));
 
   return { filings, companyName };
 }
